@@ -62,11 +62,32 @@ class AppointmentListCreateView(generics.ListCreateAPIView):
         serializer.save(status='Pending')
 
 
-class AppointmentDetailView(generics.RetrieveAPIView):
+
+class AppointmentDetailView(generics.RetrieveUpdateAPIView):
     queryset = Appointment.objects.select_related(
         'customer', 'service_provider'
     )
     serializer_class = AppointmentSerializer
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if instance.status == 'Cancelled':
+            return Response(
+                {'error': 'Cancelled appointments cannot be changed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(
+            instance,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data)
+
 
 
 class AppointmentUpdateView(generics.UpdateAPIView):
