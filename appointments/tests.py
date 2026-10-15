@@ -155,3 +155,83 @@ class AppointmentAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+        
+    def test_reject_end_time_before_start_time(self):
+        response = self.client.post(
+            "/appointments/",
+            {
+                "customer": self.customer.id,
+                "service_provider": self.provider.id,
+                "appointment_date": str(
+                    self.future_date + timedelta(days=2)
+                ),
+                "start_time": "15:00:00",
+                "end_time": "14:00:00",
+                "reason": "Invalid time test"
+            },
+            format="json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_reject_booking_in_the_past(self):
+        response = self.client.post(
+            "/appointments/",
+            {
+                "customer": self.customer.id,
+                "service_provider": self.provider.id,
+                "appointment_date": str(
+                    date.today() - timedelta(days=1)
+                ),
+                "start_time": "10:00:00",
+                "end_time": "11:00:00",
+                "reason": "Past appointment test"
+            },
+            format="json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_cancelled_slot_can_be_booked_again(self):
+        self.appointment.status = "Cancelled"
+        self.appointment.save()
+
+        response = self.client.post(
+            "/appointments/",
+            {
+                "customer": self.customer.id,
+                "service_provider": self.provider.id,
+                "appointment_date": str(self.future_date),
+                "start_time": "10:00:00",
+                "end_time": "11:00:00",
+                "reason": "Replacement appointment"
+            },
+            format="json"
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_rescheduling_into_occupied_slot_is_rejected(self):
+        second_appointment = Appointment.objects.create(
+            customer=self.customer,
+            service_provider=self.provider,
+            appointment_date=self.future_date,
+            start_time=time(12, 0),
+            end_time=time(13, 0),
+            status="Pending",
+            reason="Second appointment"
+        )
+
+        response = self.client.put(
+            f"/appointments/{self.appointment.id}/",
+            {
+                "appointment_date": str(self.future_date),
+                "start_time": "12:30:00",
+                "end_time": "13:30:00"
+            },
+            format="json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+
